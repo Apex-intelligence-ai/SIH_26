@@ -587,12 +587,12 @@
            when the browser lacks speech recognition.
            ============================================================ */
         const EW_VOICE_KEYWORDS = {
-            animal_bite: ['bite', 'bitten', 'dog', 'snake', 'cat', 'monkey', 'insect', 'bee', 'rat', 'saanp', 'sanp', 'kutta', 'kaat', 'chhup'],
-            accident: ['accident', 'crash', 'fell', 'fall', 'trauma', 'collision', 'burn', 'fire', 'drown', 'haddi', 'gir'],
-            chemical: ['chemical', 'acid', 'gas', 'poison', 'pesticide', 'fume', 'zeher', 'leak'],
-            cardiac: ['heart', 'cardiac', 'chest pain', 'arrest', 'pulse', 'dil', 'seene'],
-            bleeding: ['bleeding', 'blood', 'wound', 'haemorrhage', 'khoon', 'cut'],
-            other: ['breathing', 'choking', 'seizure', 'unconscious', 'faint', 'saans', 'dard']
+            animal_bite: ['bite', 'bitten', 'dog', 'snake', 'cat', 'monkey', 'insect', 'bee', 'rat', 'saanp', 'sanp', 'kutta', 'kaat', 'chhup', 'काट', 'कुत्ते', 'कुत्ता', 'साँप', 'सांप', 'सर्प', 'बंदर', 'काटा', 'डस', 'चूहा', 'मकड़ी', 'किड़ा', 'साप'],
+            accident: ['accident', 'crash', 'fell', 'fall', 'trauma', 'collision', 'burn', 'fire', 'drown', 'haddi', 'gir', 'एक्सीडेंट', 'हादसा', 'टक्कर', 'गिर', 'गिरा', 'गिरी', 'जल', 'आग', 'डूब', 'हड्डी', 'चोट', 'दुर्घटना', 'accident'],
+            chemical: ['chemical', 'acid', 'gas', 'poison', 'pesticide', 'fume', 'zeher', 'leak', 'कीटनाशक', 'ज़हर', 'जहर', 'गैस', 'तेजाब', 'एसिड', 'धुआं', 'रसायन', 'झेंडू'],
+            cardiac: ['heart', 'cardiac', 'chest pain', 'arrest', 'pulse', 'dil', 'seene', 'दिल', 'दिल का', 'सीने', 'छाती', 'हार्ट', 'दौरा', 'एटैक', 'attack', 'हृदय'],
+            bleeding: ['bleeding', 'blood', 'wound', 'haemorrhage', 'khoon', 'cut', 'खून', 'खुन', 'रक्त', 'चोट', 'घाव', 'कट', 'कटा', 'रिस', 'बह'],
+            other: ['breathing', 'choking', 'seizure', 'unconscious', 'faint', 'saans', 'dard', 'सांस', 'साँस', 'घुट', 'बेहोश', 'दौरे', 'झटके', 'दर्द', 'चक्कर', 'होश', 'unconscious', 'सांस नहीं', 'नशा']
         };
         const EW_VOICE_LANGS = { en: 'en-IN', hi: 'hi-IN', mr: 'mr-IN' };
         let ewVoiceRecog = null, ewVoiceActive = false;
@@ -641,24 +641,32 @@
 
         function ewHandleVoiceTranscript(transcript) {
             ewStopVoice();
-            const t = transcript.toLowerCase();
+            const t = (transcript || '').toLowerCase();
             document.getElementById('ew-voice-result').style.display = 'block';
             document.getElementById('ew-voice-transcript').textContent = '"' + transcript + '"';
 
-            let bestType = null, bestHits = 0;
+            // Match keywords (both romanized & Devanagari), plus fuzzy
+            // containment for inflections ("katata", "khoon nikal"...).
+            let bestType = null, bestHits = 0, matchedWords = [];
             Object.keys(EW_VOICE_KEYWORDS).forEach(type => {
-                const hits = EW_VOICE_KEYWORDS[type].filter(k => t.includes(k)).length;
-                if (hits > bestHits) { bestHits = hits; bestType = type; }
+                let hits = 0, words = [];
+                EW_VOICE_KEYWORDS[type].forEach(k => {
+                    if (t.includes(k)) { hits++; words.push(k); }
+                });
+                if (hits > bestHits) { bestHits = hits; bestType = type; matchedWords = words; }
             });
 
             if (bestType) {
                 const label = ewData[bestType].label;
+                const heard = matchedWords.slice(0, 3).join(', ');
                 document.getElementById('ew-voice-match').innerHTML =
-                    '✅ Detected: <b>' + label + '</b> — opening the right protocol…';
+                    '✅ Detected: <b>' + label + '</b>' + (heard ? ' <span style="color:#6b7280;">(heard: ' + heard + ')</span>' : '') +
+                    ' — opening the right protocol…';
                 setTimeout(() => ewSelectType(bestType), 900);
             } else {
-                document.getElementById('ew-voice-match').textContent =
-                    'Could not map that to an emergency type — please select below.';
+                document.getElementById('ew-voice-match').innerHTML =
+                    '⚠️ Not sure what to pick — <b>tap any card below yourself</b>.<br>' +
+                    '<span style="color:#6b7280;">Tip: try saying "snakebite", "saanp ne kaata", "साँप ने काटा", "chest pain", "दिल का दौरा", "खून", "accident".</span>';
             }
         }
 
