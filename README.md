@@ -1,6 +1,20 @@
+<div align="center">
+
+<img src="logo.png" alt="Emergency Mitra" width="88"/>
+
 # 🚑 Emergency Mitra
 
-> **Right Care. Right Facility. Right Now.**
+**Right Care. Right Facility. Right Now.**
+
+[![CI](https://github.com/Apex-intelligence-ai/SIH_26/actions/workflows/ci.yml/badge.svg)](https://github.com/Apex-intelligence-ai/SIH_26/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-33%20passing-brightgreen)](#-running-it)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![SIH 2026](https://img.shields.io/badge/Smart%20India%20Hackathon-2026-FF6B35)
+![PS-26133](https://img.shields.io/badge/PS-SIH26133%20·%20HealthTech-2E86AB)
+
+*Trust-scored emergency routing network for rural India*
+
+</div>
 
 Emergency Mitra is a trust-scored emergency routing network for rural India, built for
 **Smart India Hackathon 2026** (Problem Statement **SIH-26133** — *"Accessibility and
@@ -85,12 +99,12 @@ python -m http.server 8000        # or: npx serve .
 The regression suites are plain Node scripts — zero dependencies:
 
 ```bash
-node test/test-credibility-engine.js   # 13 tests — scoring rules & tiers
-node test/test-facilities.js           #  8 tests — finder, dedupe, booking
-node test/test-tutorial.js             # 12 tests — demo-mode integrity
+npm test            # all 33 tests (trust + facilities + tutorial)
+npm run test:trust  # scoring rules only
 ```
 
-**33 tests, all green.** If a change breaks a suite, it doesn't ship.
+**33 tests, all green.** If a change breaks a suite, it doesn't ship — CI
+(GitHub Actions) runs the same suites on every push and pull request.
 
 ---
 
