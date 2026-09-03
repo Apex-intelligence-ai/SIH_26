@@ -229,6 +229,19 @@
         const km = distOf(f);
         const isBooked = booked.has(f.id);
 
+        // Live bed-availability badge (capacity-aware routing proof)
+        let bedBadge = '';
+        if (f.beds) {
+            const icuFree = bedsAvailable(f.beds.ICU || '0/0');
+            const o2Free = bedsAvailable(f.beds.Oxygen || '0/0');
+            const genFree = bedsAvailable(f.beds.General || '0/0');
+            const totalFree = icuFree + o2Free + genFree;
+            const bedCls = totalFree === 0 ? 'beds-zero' : (totalFree <= 5 ? 'beds-low' : 'beds-ok');
+            const bedLabel = totalFree === 0 ? 'FULL' : (totalFree <= 5 ? totalFree + ' BEDS LEFT' : totalFree + ' BEDS AVAILABLE');
+            bedBadge = '<span class="ff-bed-badge ' + bedCls + '">' +
+                '<span class="material-symbols-outlined">bed</span>' + bedLabel + '</span>';
+        }
+
         let res = '';
         if (f.beds) {
             res += '<div class="ff-beds">' + Object.keys(f.beds).map(k => {
@@ -276,6 +289,7 @@
                     '<span class="material-symbols-outlined">' + (open ? 'check_circle' : 'schedule') + '</span>' +
                     (open ? (f.hours === '24/7' ? '24\u00d77 OPEN' : 'OPEN NOW') : 'CLOSED') + '</span>' +
             '</div>' +
+            (bedBadge ? '<div class="ff-bed-row">' + bedBadge + '</div>' : '') +
             scoreBar(f.score) +
             res +
             '<div class="ff-actions">' +
@@ -394,6 +408,14 @@
                 'animation:ffIn .35s ease both}' +
             '.ff-card:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(16,32,26,.12);border-color:rgba(28,105,95,.33)}' +
             '.ff-card.nearest{border-color:#1c695f;box-shadow:0 6px 18px rgba(28,105,95,.18)}' +
+            '.ff-bed-row{margin-top:-2px}' +
+            '.ff-bed-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;' +
+                'letter-spacing:.4px;padding:5px 10px;border-radius:9px;border:1px solid}' +
+            '.ff-bed-badge .material-symbols-outlined{font-size:15px}' +
+            '.ff-bed-badge.beds-ok{background:#e6f2ee;color:#166534;border-color:#b3d9cc;animation:bedPulse 2.5s infinite}' +
+            '.ff-bed-badge.beds-low{background:#fdf6e4;color:#854d0e;border-color:#f0e0b0}' +
+            '.ff-bed-badge.beds-zero{background:#fdeeee;color:#ba1a1a;border-color:#f2c6c6}' +
+            '@keyframes bedPulse{0%,100%{opacity:1}50%{opacity:.72}}' +
             '@keyframes ffIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}' +
             '.ff-ribbon{position:absolute;top:-10px;right:12px;background:#1c695f;color:#fff;font-size:10.5px;' +
                 'font-weight:800;letter-spacing:.6px;padding:3px 9px;border-radius:999px;display:flex;' +

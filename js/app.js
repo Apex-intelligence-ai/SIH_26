@@ -544,6 +544,122 @@
             document.getElementById('ew-step-label').textContent = labels[step];
             const progWidths = ['', '25%', '50%', '75%', '100%'];
             document.getElementById('ew-progress-bar').style.width = progWidths[step];
+            if (step !== 1) ewStopVoice();
+        }
+
+        /* ============================================================
+           SPEAK EMERGENCY — Web Speech API (voice complaint, EN/HI/MR)
+           Maps spoken keywords to the wizard's emergency types and
+           auto-selects the best match. Falls back to a helpful note
+           when the browser lacks speech recognition.
+           ============================================================ */
+        const EW_VOICE_KEYWORDS = {
+            animal_bite: ['bite', 'bitten', 'dog', 'snake', 'cat', 'monkey', 'insect', 'bee', 'rat', 'saanp', 'sanp', 'kutta', 'kaat', 'chhup'],
+            accident: ['accident', 'crash', 'fell', 'fall', 'trauma', 'collision', 'burn', 'fire', 'drown', 'haddi', 'gir'],
+            chemical: ['chemical', 'acid', 'gas', 'poison', 'pesticide', 'fume', 'zeher', 'leak'],
+            cardiac: ['heart', 'cardiac', 'chest pain', 'arrest', 'pulse', 'dil', 'seene'],
+            bleeding: ['bleeding', 'blood', 'wound', 'haemorrhage', 'khoon', 'cut'],
+            other: ['breathing', 'choking', 'seizure', 'unconscious', 'faint', 'saans', 'dard']
+        };
+        const EW_VOICE_LANGS = { en: 'en-IN', hi: 'hi-IN', mr: 'mr-IN' };
+        let ewVoiceRecog = null, ewVoiceActive = false;
+
+        function ewToggleVoice() {
+            if (ewVoiceActive) { ewStopVoice(); return; }
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) {
+                document.getElementById('ew-voice-result').style.display = 'block';
+                document.getElementById('ew-voice-transcript').textContent = 'Voice mode is not supported in this browser.';
+                document.getElementById('ew-voice-match').textContent = 'Please select the emergency type below instead.';
+                return;
+            }
+            const lang = (window.currentLang && EW_VOICE_LANGS[window.currentLang]) || 'en-IN';
+            ewVoiceRecog = new SR();
+            ewVoiceRecog.lang = lang;
+            ewVoiceRecog.interimResults = false;
+            ewVoiceRecog.maxAlternatives = 1;
+            ewVoiceActive = true;
+            document.getElementById('ew-voice-icon').textContent = 'graphic_eq';
+            document.getElementById('ew-voice-icon').style.animation = 'pulse 1s infinite';
+            document.getElementById('ew-voice-text').textContent = 'Listening... speak now (tap to stop)';
+            ewVoiceRecog.onresult = ev => {
+                const transcript = ev.results[0][0].transcript;
+                ewHandleVoiceTranscript(transcript);
+            };
+            ewVoiceRecog.onerror = ev => {
+                ewStopVoice();
+                document.getElementById('ew-voice-result').style.display = 'block';
+                document.getElementById('ew-voice-transcript').textContent =
+                    ev.error === 'not-allowed' ? 'Microphone permission denied.' : 'Could not hear clearly — try again.';
+                document.getElementById('ew-voice-match').textContent = 'Tap the mic once more, or select below.';
+            };
+            ewVoiceRecog.onend = () => { if (ewVoiceActive) ewStopVoice(); };
+            try { ewVoiceRecog.start(); } catch (e) { ewStopVoice(); }
+        }
+
+        function ewStopVoice() {
+            ewVoiceActive = false;
+            if (ewVoiceRecog) { try { ewVoiceRecog.stop(); } catch (e) { /* already stopped */ } ewVoiceRecog = null; }
+            const icon = document.getElementById('ew-voice-icon');
+            const txt = document.getElementById('ew-voice-text');
+            if (icon) { icon.textContent = 'mic'; icon.style.animation = ''; }
+            if (txt) txt.textContent = 'Speak Your Emergency — बोलकर बताएं';
+        }
+
+        function ewHandleVoiceTranscript(transcript) {
+            ewStopVoice();
+            const t = transcript.toLowerCase();
+            document.getElementById('ew-voice-result').style.display = 'block';
+            document.getElementById('ew-voice-transcript').textContent = '"' + transcript + '"';
+
+            let bestType = null, bestHits = 0;
+            Object.keys(EW_VOICE_KEYWORDS).forEach(type => {
+                const hits = EW_VOICE_KEYWORDS[type].filter(k => t.includes(k)).length;
+                if (hits > bestHits) { bestHits = hits; bestType = type; }
+            });
+
+            if (bestType) {
+                const label = ewData[bestType].label;
+                document.getElementById('ew-voice-match').innerHTML =
+                    '✅ Detected: <b>' + label + '</b> — opening the right protocol…';
+                setTimeout(() => ewSelectType(bestType), 900);
+            } else {
+                document.getElementById('ew-voice-match').textContent =
+                    'Could not map that to an emergency type — please select below.';
+            }
+        }
+
+        /* ============================================================
+           FIRST-AID VOICE-OUT — browser TTS so bystanders can LISTEN
+           to Do's & Don'ts hands-free (works offline via OS voices).
+           ============================================================ */
+        function ewSpeakFirstAid() {
+            if (!('speechSynthesis' in window)) return;
+            const speechSynthesis = window.speechSynthesis;
+            if (speechSynthesis.speaking) { speechSynthesis.cancel(); ewResetSpeakBtn(); return; }
+
+            const dos = Array.from(document.querySelectorAll('#ew-dos-donts > div:first-child li'))
+                .map(li => li.textContent.trim());
+            const script = dos.length ? dos.map((d, i) => (i + 1) + '. ' + d).join('. ') :
+                'Follow the on-screen first aid steps and keep the patient calm.';
+            const u = new SpeechSynthesisUtterance('First aid instructions. ' + script);
+            const lang = (window.currentLang === 'hi') ? 'hi-IN' : (window.currentLang === 'mr') ? 'mr-IN' : 'en-IN';
+            u.lang = lang;
+            u.rate = 0.95;
+            const voice = speechSynthesis.getVoices().find(v => v.lang === lang) ||
+                          speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith(lang.split('-')[0]));
+            if (voice) u.voice = voice;
+            u.onend = ewResetSpeakBtn;
+            u.onerror = ewResetSpeakBtn;
+            speechSynthesis.speak(u);
+
+            const btn = document.getElementById('ew-speak-btn');
+            if (btn) btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:20px;">stop</span> Stop Voice';
+        }
+
+        function ewResetSpeakBtn() {
+            const btn = document.getElementById('ew-speak-btn');
+            if (btn) btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:20px;">volume_up</span> Listen to First-Aid (Voice)';
         }
 
         function ewSelectType(type) {

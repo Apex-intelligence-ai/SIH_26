@@ -138,7 +138,9 @@
                     : '<span class="dash-badge gray">pending</span>';
                 tbody.innerHTML += `
                     <tr>
-                        <td class="font-bold font-mono text-primary">${c.id}</td>
+                        <td class="font-bold font-mono text-primary">
+                            <button onclick="openCaseTimeline(${idx})" title="View case timeline" class="hover:underline">${c.id}</button>
+                        </td>
                         <td class="text-xs text-on-surface-variant">${c.time}</td>
                         <td><div class="font-bold">${c.patient}</div><div class="text-xs text-on-surface-variant">${c.age} • ${c.vitals}</div></td>
                         <td class="font-semibold">${c.type}</td>
@@ -305,6 +307,70 @@
         function updateCaseStatus(idx, newStatus) {
             adminCases[idx].status = newStatus;
             showToast(`Case ${adminCases[idx].id} status updated to: ${newStatus}`);
+        }
+
+        /* ============================================================
+           CASE TIMELINE — golden-hour journey for each case.
+           Click any Case ID to see Filed → Verified → Dispatched →
+           En Route → Facility stages with timestamps.
+           ============================================================ */
+        const CASE_STAGE_ORDER = ['Filed', 'Verified', 'Dispatched', 'En Route', 'At Facility', 'Closed'];
+
+        function caseStages(c) {
+            const t = (m) => c.time;   // prototype: timestamps relative to case age
+            const stageMap = {
+                'En Route':               { done: ['Filed', 'Verified', 'Dispatched', 'En Route'], cur: 'At Facility' },
+                'In ER':                  { done: ['Filed', 'Verified', 'Dispatched', 'En Route', 'At Facility'], cur: 'Closed' },
+                'ICU Admitted':           { done: ['Filed', 'Verified', 'Dispatched', 'En Route', 'At Facility'], cur: 'Closed' },
+                'OT Prepped':             { done: ['Filed', 'Verified', 'Dispatched', 'En Route', 'At Facility'], cur: 'Closed' },
+                'Under Observation':      { done: ['Filed', 'Verified', 'Dispatched', 'En Route', 'At Facility'], cur: 'Closed' },
+                'Stabilized / Discharged':{ done: CASE_STAGE_ORDER, cur: null }
+            };
+            const cfg = stageMap[c.status] || { done: ['Filed', 'Verified'], cur: 'Dispatched' };
+            return CASE_STAGE_ORDER.map(s => ({
+                stage: s,
+                state: cfg.done.includes(s) ? 'done' : (cfg.cur === s ? 'current' : 'pending')
+            }));
+        }
+
+        function openCaseTimeline(idx) {
+            const c = adminCases[idx];
+            if (!c) return;
+            const stages = caseStages(c);
+            const stepW = 100 / stages.length;
+
+            const items = stages.map((s, i) => {
+                const icon = s.state === 'done' ? 'check_circle'
+                    : (s.state === 'current' ? 'pending_actions' : 'radio_button_unchecked');
+                const color = s.state === 'done' ? '#166534' : (s.state === 'current' ? '#d97706' : '#9ca3af');
+                const bg = s.state === 'current' ? 'background:#fef3c7;' : '';
+                return `
+                <div style="display:flex; align-items:flex-start; gap:10px; ${bg} padding:8px 10px; border-radius:10px;">
+                    <span class="material-symbols-outlined" style="font-size:22px; color:${color};">${icon}</span>
+                    <div style="flex:1;">
+                        <div style="font-weight:800; font-size:13.5px; color:${s.state === 'pending' ? '#9ca3af' : '#1f2937'};">${s.stage}</div>
+                        ${s.state !== 'pending' ? `<div style="font-size:11.5px; color:#6b7280;">${c.time}${s.state === 'current' ? ' • in progress' : ' • complete'}</div>` : ''}
+                    </div>
+                    ${s.state === 'current' ? '<span class="dash-badge yellow">NOW</span>' : (s.state === 'done' ? '<span class="dash-badge green">DONE</span>' : '')}
+                </div>`;
+            }).join('');
+
+            const bar = `<div style="height:8px; background:#e5e7eb; border-radius:99px; overflow:hidden; margin:6px 0 16px;">
+                <div style="height:100%; width:${Math.round(stages.filter(s => s.state === 'done').length / stages.length * 100)}%;
+                     background:linear-gradient(90deg,#166534,#22c55e); border-radius:99px; transition:width .5s ease;"></div>
+            </div>`;
+
+            document.getElementById('case-timeline-body').innerHTML = `
+                <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; font-size:13px;">
+                        <div><b>${c.patient}</b> <span style="color:#6b7280;">(${c.age})</span></div>
+                        <div style="font-weight:700; color:#ba1a1a;">${c.type}</div>
+                    </div>
+                    <div style="font-size:12px; color:#6b7280; margin-top:4px;">${c.hospital} • ${c.vitals}</div>
+                </div>
+                ${bar}${items}`;
+
+            openModal('modal-case-timeline');
         }
 
         function triggerNewAdmissionModal() {

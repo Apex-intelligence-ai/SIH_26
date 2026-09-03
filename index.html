@@ -1125,8 +1125,7 @@
     </div>
 
     <!-- Quick New Admission Modal -->
-    <div class="modal items-center justify-center p-4 z-[120]" id="modal-quick-admission">
-        <div class="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl border border-outline-variant space-y-4">
+    <div class="modal items-center justify-center p-4 z-[120]" id="modal-quick-admission">        <div class="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl border border-outline-variant space-y-4">
             <div class="flex justify-between items-center border-b pb-3">
                 <h3 class="font-bold text-lg text-primary flex items-center gap-2">
                     <span class="material-symbols-outlined text-error">emergency</span> Direct Emergency Case Admission
@@ -1178,6 +1177,21 @@
                     Admit &amp; Dispatch Alert
                 </button>
             </form>
+        </div>
+    </div>
+
+    <!-- Case Timeline Modal -->
+    <div class="modal items-center justify-center p-4 z-[120]" id="modal-case-timeline">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-outline-variant">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-primary flex items-center gap-2">
+                    <span class="material-symbols-outlined">timeline</span> Golden-Hour Journey
+                </h3>
+                <button onclick="closeModal('modal-case-timeline')" class="text-on-surface-variant hover:text-error p-1 rounded-lg hover:bg-error-container">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div id="case-timeline-body"></div>
         </div>
     </div>
 
@@ -1657,6 +1671,15 @@
           <!-- Step 1: Emergency Type -->
           <div id="ew-step1">
             <p style="font-weight:700; font-size:17px; color:#131b2e; margin-bottom:18px;">What type of emergency are you facing?</p>
+            <button id="ew-voice-btn" onclick="ewToggleVoice()" style="width:100%; margin-bottom:18px; background:linear-gradient(135deg,#00453d,#0b6b5d); color:#fff; border:none; border-radius:14px; padding:16px; font-size:15px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:0 4px 14px rgba(0,69,61,.3);">
+              <span class="material-symbols-outlined" id="ew-voice-icon" style="font-size:22px;">mic</span>
+              <span id="ew-voice-text">Speak Your Emergency — बोलकर बताएं</span>
+            </button>
+            <div id="ew-voice-result" style="display:none; margin:-8px 0 18px; background:#eff6ff; border:2px solid #93c5fd; border-radius:12px; padding:12px 14px;">
+              <div style="font-size:11px; font-weight:800; color:#1e40af; letter-spacing:.5px; margin-bottom:4px;">VOICE DETECTED</div>
+              <div id="ew-voice-transcript" style="font-size:14px; color:#1e3a8a; font-weight:700;"></div>
+              <div id="ew-voice-match" style="font-size:12px; color:#374151; margin-top:4px;"></div>
+            </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
               <button class="ew-type-btn" onclick="ewSelectType('animal_bite')" style="background:#fff0f0; border:2px solid #fca5a5; border-radius:14px; padding:18px 14px; cursor:pointer; text-align:left; transition:all 0.2s;">
                 <div style="font-size:28px; margin-bottom:8px;">🐾</div>
@@ -1709,6 +1732,9 @@
           <!-- Step 4: Assistance -->
           <div id="ew-step4" style="display:none;">
             <div id="ew-severity-badge" style="text-align:center; margin-bottom:18px;"></div>
+            <button id="ew-speak-btn" onclick="ewSpeakFirstAid()" style="width:100%; margin-bottom:18px; background:linear-gradient(135deg,#1d4ed8,#2563eb); color:#fff; border:none; border-radius:12px; padding:13px; font-size:14px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 12px rgba(37,99,235,.3);">
+              <span class="material-symbols-outlined" style="font-size:20px;">volume_up</span> Listen to First-Aid (Voice)
+            </button>
             <div id="ew-dos-donts" style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;"></div>
             <div id="ew-first-aid-steps" style="margin-bottom:18px;"></div>
             <div style="background:#f0fdf4; border:2px solid #4ade80; border-radius:14px; padding:18px; margin-bottom:14px;">
