@@ -19,11 +19,12 @@
 
         // --- Admin Dashboard State ---
         let adminCases = [
-            { id: "EM-9021", time: "2 mins ago", patient: "Ramesh Pawar", age: "42 / M", type: "Snakebite 🐍", priority: "CRITICAL", hospital: "District Hospital Wardha", doctor: "Dr. Kulkarni", status: "En Route", eta: "8 mins", vitals: "BP: 90/60 • SpO2: 92%" },
-            { id: "EM-9020", time: "14 mins ago", patient: "Sunita Ghorpade", age: "29 / F", type: "Accident / Trauma", priority: "CRITICAL", hospital: "District Hospital Wardha", doctor: "Dr. Deshmukh", status: "In ER", eta: "Arrived", vitals: "BP: 110/70 • SpO2: 97%" },
-            { id: "EM-9019", time: "28 mins ago", patient: "Babanrao Patil", age: "64 / M", type: "Cardiac Arrest", priority: "CRITICAL", hospital: "Rural Hospital Sevagram", doctor: "Dr. A. Verma", status: "ICU Admitted", eta: "Arrived", vitals: "Pulse: 88 • SpO2: 95%" },
-            { id: "EM-9018", time: "45 mins ago", patient: "Kavita Shinde", age: "31 / F", type: "Severe Bleeding", priority: "URGENT", hospital: "SDH Hinganghat", doctor: "Dr. R. Joshi", status: "OT Prepped", eta: "Arrived", vitals: "BP: 100/65 • Hb: 8.4" },
-            { id: "EM-9017", time: "1 hr ago", patient: "Vijay Gaikwad", age: "52 / M", type: "Breathing Issue", priority: "STABLE", hospital: "PHC Deoli", doctor: "Dr. M. Roy", status: "Under Observation", eta: "Arrived", vitals: "SpO2: 98% on O2" }
+            { id: "EM-9021", time: "2 mins ago", patient: "Ramesh Pawar", age: "42 / M", type: "Snakebite 🐍", priority: "CRITICAL", hospital: "District Hospital Wardha", doctor: "Dr. Kulkarni", status: "En Route", eta: "8 mins", vitals: "BP: 90/60 • SpO2: 92%", trust: 91, trustTier: "HIGH", trustNote: "OTP verified + photo + GPS + 3-report cluster" },
+            { id: "EM-9020", time: "14 mins ago", patient: "Sunita Ghorpade", age: "29 / F", type: "Accident / Trauma", priority: "CRITICAL", hospital: "District Hospital Wardha", doctor: "Dr. Deshmukh", status: "In ER", eta: "Arrived", vitals: "BP: 110/70 • SpO2: 97%", trust: 84, trustTier: "HIGH", trustNote: "DigiLocker badge + camera evidence + GPS" },
+            { id: "EM-9019", time: "28 mins ago", patient: "Babanrao Patil", age: "64 / M", type: "Cardiac Arrest", priority: "CRITICAL", hospital: "Rural Hospital Sevagram", doctor: "Dr. A. Verma", status: "ICU Admitted", eta: "Arrived", vitals: "Pulse: 88 • SpO2: 95%", trust: 78, trustTier: "MEDIUM", trustNote: "OTP verified + GPS + wearable HR spike" },
+            { id: "EM-9018", time: "45 mins ago", patient: "Kavita Shinde", age: "31 / F", type: "Severe Bleeding", priority: "URGENT", hospital: "SDH Hinganghat", doctor: "Dr. R. Joshi", status: "OT Prepped", eta: "Arrived", vitals: "BP: 100/65 • Hb: 8.4", trust: 63, trustTier: "MEDIUM", trustNote: "Photo evidence + GPS, no cluster" },
+            { id: "EM-9017", time: "1 hr ago", patient: "Vijay Gaikwad", age: "52 / M", type: "Breathing Issue", priority: "STABLE", hospital: "PHC Deoli", doctor: "Dr. M. Roy", status: "Under Observation", eta: "Arrived", vitals: "SpO2: 98% on O2", trust: 41, trustTier: "MEDIUM", trustNote: "OTP verified + GPS only" },
+            { id: "EM-9016", time: "2 hrs ago", patient: "Unknown (bystander SOS)", age: "— / M", type: "Road Accident 🛣️", priority: "URGENT", hospital: "PHC Seloo", doctor: "Dr. On Duty", status: "Stabilized / Discharged", eta: "Arrived", vitals: "Assessed on arrival", trust: 22, trustTier: "LOW", trustNote: "Anonymous bare SOS — volunteer verified on IVR" }
         ];
 
         let hospitalData = [
@@ -66,6 +67,7 @@
             }
 
             renderDashboard();
+            if (tabKey === 'litemap') renderDashLiveMap();
         }
 
         function openDashboardModal() {
@@ -126,6 +128,7 @@
             tbody.innerHTML = '';
             adminCases.forEach((c, idx) => {
                 const priorityBadge = c.priority === 'CRITICAL' ? 'dash-badge red' : (c.priority === 'URGENT' ? 'dash-badge yellow' : 'dash-badge blue');
+                const trustBadge = c.trustTier === 'HIGH' ? 'dash-badge red' : (c.trustTier === 'MEDIUM' ? 'dash-badge yellow' : 'dash-badge blue');
                 tbody.innerHTML += `
                     <tr>
                         <td class="font-bold font-mono text-primary">${c.id}</td>
@@ -133,6 +136,7 @@
                         <td><div class="font-bold">${c.patient}</div><div class="text-xs text-on-surface-variant">${c.age} • ${c.vitals}</div></td>
                         <td class="font-semibold">${c.type}</td>
                         <td><span class="${priorityBadge}">${c.priority}</span></td>
+                        <td><span class="${trustBadge}" title="${c.trustNote || ''}">🛡 ${c.trust} · ${c.trustTier}</span></td>
                         <td class="text-xs font-medium">${c.hospital}</td>
                         <td class="text-xs font-bold text-primary">${c.doctor}</td>
                         <td>
@@ -380,3 +384,82 @@
         function switchHospitalView(val) {
             showToast(val === 'all' ? 'Displaying all 8 network facilities.' : `Filtered dashboard for: ${val.toUpperCase()}`);
         }
+
+        /* ============================================================
+           LIVE DISTRICT MAP (Leaflet + OpenStreetMap tiles)
+           Facilities (readiness-colored) + active cases (tier-colored)
+           + en-route ambulances. Renders lazily on first tab open.
+           ============================================================ */
+        const MAP_CASES = [
+            { id: "EM-9021", label: "Snakebite 🐍", tier: "CRITICAL", lat: 20.7420, lng: 78.5970, pop: "Ramesh Pawar • Snakebite • ALS MH-31-EM-102 en route" },
+            { id: "EM-9020", label: "Accident / Trauma", tier: "CRITICAL", lat: 20.7510, lng: 78.6120, pop: "Sunita Ghorpade • Trauma • In ER at DH Wardha" },
+            { id: "EM-9018", label: "Severe Bleeding", tier: "URGENT", lat: 20.5490, lng: 78.5460, pop: "Kavita Shinde • Bleeding • OT prepped at SDH Hinganghat" },
+            { id: "EM-9017", label: "Breathing Issue", tier: "STABLE", lat: 20.7720, lng: 78.4550, pop: "Vijay Gaikwad • Breathing • Under observation at PHC Deoli" }
+        ];
+        const MAP_AMBULANCES = [
+            { id: "MH-31-EM-102", lat: 20.7350, lng: 78.5850, pop: "ALS • En route to DH Wardha • ETA 8 min" },
+            { id: "MH-31-EM-108", lat: 20.5610, lng: 78.5330, pop: "ALS • En route on Hinganghat Bypass • ETA 12 min" }
+        ];
+
+        let _dashMap = null;
+        const _tierColor = { CRITICAL: '#ba1a1a', URGENT: '#d97706', STABLE: '#2563eb' };
+
+        function _mapDivIcon(color, glyph, size) {
+            return L.divIcon({
+                className: '',
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2],
+                html: '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;' +
+                    'background:' + color + ';color:#fff;display:flex;align-items:center;' +
+                    'justify-content:center;font-size:' + Math.round(size * 0.55) + 'px;' +
+                    'box-shadow:0 2px 8px rgba(0,0,0,.35);border:2px solid #fff;">' + glyph + '</div>'
+            });
+        }
+
+        function renderDashLiveMap() {
+            const holder = document.getElementById('dash-live-map');
+            if (!holder || typeof L === 'undefined') return;
+
+            if (!_dashMap) {
+                _dashMap = L.map('dash-live-map', { scrollWheelZoom: false }).setView([20.72, 78.58], 10);
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(_dashMap);
+            }
+            // Leaflet renders 0x0 inside hidden panels — force a re-measure.
+            setTimeout(() => _dashMap.invalidateSize(), 60);
+
+            _dashMap.eachLayer(l => { if (l instanceof L.Marker) _dashMap.removeLayer(l); });
+
+            hospitalData.forEach(h => {
+                const c = MAP_FACILITY_COORDS[h.id];
+                if (!c) return;
+                L.marker([c.lat, c.lng], { icon: _mapDivIcon('#1c695f', 'H', 30) })
+                    .addTo(_dashMap)
+                    .bindPopup('<b>' + h.name + '</b><br>' + h.tier +
+                        '<br>ICU: ' + h.icu + ' • O2: ' + h.o2 +
+                        '<br>Antivenom: ' + h.antivenom + ' vials • Readiness ' + h.score + '%');
+            });
+
+            MAP_CASES.forEach(c => {
+                L.circleMarker([c.lat, c.lng], {
+                    radius: 9, color: '#fff', weight: 2,
+                    fillColor: _tierColor[c.tier] || '#2563eb', fillOpacity: 0.95
+                }).addTo(_dashMap)
+                    .bindPopup('<b>' + c.id + ' — ' + c.tier + '</b><br>' + c.pop);
+            });
+
+            MAP_AMBULANCES.forEach(a => {
+                L.marker([a.lat, a.lng], { icon: _mapDivIcon('#7c3aed', '🚑', 30) })
+                    .addTo(_dashMap)
+                    .bindPopup('<b>' + a.id + '</b><br>' + a.pop);
+            });
+        }
+
+        const MAP_FACILITY_COORDS = {
+            dh_wardha:      { lat: 20.7450, lng: 78.6030 },
+            rh_sevagram:    { lat: 20.7380, lng: 78.6480 },
+            sdh_hinganghat: { lat: 20.5460, lng: 78.5410 },
+            phc_deoli:      { lat: 20.7700, lng: 78.4600 }
+        };

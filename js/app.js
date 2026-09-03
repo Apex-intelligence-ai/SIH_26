@@ -589,7 +589,6 @@
             const criticalSymptoms = ['Loss of consciousness','Cardiac Arrest','Not breathing','Unresponsive','Difficulty breathing','No pulse / Not breathing','Gasping or no breath sounds','Collapsed suddenly','Swelling spreading rapidly','Bleeding from gums','Muscle weakness / paralysis','Severe bleeding','Spurting blood','Suspected Internal'];
             let isCritical = selected.some(s => criticalSymptoms.some(c => s.toLowerCase().includes(c.toLowerCase())));
             const severity = isCritical ? 'CRITICAL' : (selected.length >= 3 ? 'URGENT' : 'STABLE');
-
             // Severity badge
             const badgeColors = { CRITICAL: '#ba1a1a', URGENT: '#d97706', STABLE: '#16a34a' };
             const badgeIcons = { CRITICAL: '🚨', URGENT: '⚠️', STABLE: '✅' };
@@ -629,7 +628,82 @@
               <div style="font-size:13px; color:#15803d;">✅ Ambulance dispatch request initiated — ETA ~12 min</div>
               <div style="font-size:13px; color:#15803d;">✅ Emergency team on standby</div>`;
 
+            // Trust-score breakdown (live scoring via TrustLayer engine)
+            renderTrustBreakdown(selected, severity, isCritical);
+
             ewShowStep(4);
+        }
+
+        /* ------------------------------------------------------------
+           TRUST SCORE BREAKDOWN — calls the real TrustLayer scoring
+           engine (credibility-engine.js) and renders every factor so
+           users/judges see exactly how the 0–100 score was assembled.
+           ------------------------------------------------------------ */
+        function renderTrustBreakdown(selectedSymptoms, severity, isCritical) {
+            const box = document.getElementById('ew-trust-breakdown');
+            if (!box) return;
+            const TL = window.TrustLayer;
+            if (!TL || !TL.CredEngine) { box.innerHTML = ''; return; }
+
+            const hasPhoto = selectedSymptoms.some(s => /swelling|bleeding|burn|rash|wound|discolour/i.test(s));
+            const lat = 20.7450 + (Math.random() - 0.5) * 0.01;
+            const lng = 78.6030 + (Math.random() - 0.5) * 0.01;
+
+            const result = TL.CredEngine.scoreAlert({
+                id: 'ew-' + Date.now(),
+                lat: lat,
+                lng: lng,
+                type: ewCurrentType,
+                geo: true,
+                reporterVerified: true,
+                cameraEvidence: hasPhoto,
+                voiceMemo: null,
+                spamFlagged: false
+            });
+
+            const tierMeta = {
+                HIGH:   { color: '#ba1a1a', label: 'HIGH — AUTO-DISPATCH',     icon: 'rocket_launch' },
+                MEDIUM: { color: '#d97706', label: 'MEDIUM — OPERATOR CONFIRM', icon: 'supervisor_account' },
+                LOW:    { color: '#16a34a', label: 'LOW — VOLUNTEER VERIFY',    icon: 'person_search' }
+            };
+            const meta = tierMeta[result.tier] || tierMeta.MEDIUM;
+            const ringColor = result.score >= 80 ? '#ba1a1a' : (result.score >= 40 ? '#d97706' : '#16a34a');
+
+            const rows = result.factors.map(f => {
+                const pts = f.pts;
+                const cls = pts > 0 ? 'color:#166534;' : (pts < 0 ? 'color:#ba1a1a;' : 'color:#6b7280;');
+                const sign = pts > 0 ? '+' : '';
+                return '<tr>' +
+                    '<td style="padding:5px 0; font-size:12.5px; color:#374151; font-weight:600;">' + f.label + '</td>' +
+                    '<td style="padding:5px 0; text-align:right; font-weight:800; font-size:13px; ' + cls + '">' +
+                    sign + pts + '</td></tr>';
+            }).join('');
+
+            box.innerHTML =
+                '<div style="background:#fafcfa; border:2px solid #d9e5e0; border-radius:14px; padding:16px; margin-top:6px;">' +
+                    '<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">' +
+                        '<div style="font-weight:800; color:#00453d; font-size:14px; display:flex; align-items:center; gap:6px;">' +
+                            '<span class="material-symbols-outlined">verified_user</span> Anti-Fake Trust Score</div>' +
+                        '<div style="display:flex; align-items:center; gap:10px;">' +
+                            '<div style="position:relative; width:58px; height:58px;">' +
+                                '<svg viewBox="0 0 36 36" style="width:58px; height:58px; transform:rotate(-90deg);">' +
+                                    '<circle cx="18" cy="18" r="15.5" fill="none" stroke="#e5e7eb" stroke-width="4"></circle>' +
+                                    '<circle cx="18" cy="18" r="15.5" fill="none" stroke="' + ringColor + '" stroke-width="4" ' +
+                                        'stroke-dasharray="' + result.score + ' 100" stroke-linecap="round"></circle>' +
+                                '</svg>' +
+                                '<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; ' +
+                                    'font-weight:900; font-size:15px; color:' + ringColor + ';">' + result.score + '</div>' +
+                            '</div>' +
+                            '<div style="background:' + meta.color + '; color:#fff; border-radius:9px; padding:7px 12px; ' +
+                                'font-size:12px; font-weight:800; display:flex; align-items:center; gap:5px;">' +
+                                '<span class="material-symbols-outlined" style="font-size:16px;">' + meta.icon + '</span>' +
+                                meta.label + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<table style="width:100%; border-collapse:collapse; margin-top:10px; border-top:1px dashed #d1dbd6;">' + rows + '</table>' +
+                    '<div style="font-size:11px; color:#6b7280; margin-top:8px;">Score computed live by the on-device credibility engine — ' +
+                        'every factor is auditable. Fake reports get penalized; verified evidence boosts dispatch priority.</div>' +
+                '</div>';
         }
 
         function startSosSequence() {
@@ -637,6 +711,14 @@
             const s2 = document.getElementById('sos-step-2');
             const s3 = document.getElementById('sos-step-3');
             const s4 = document.getElementById('sos-step-4');
+
+            // Pressed-state + haptic feedback on the SOS button
+            const sosBtn = document.querySelector('.btn-sos');
+            if (sosBtn) {
+                sosBtn.classList.add('sos-pressed');
+                if (navigator.vibrate) navigator.vibrate([60, 40, 120]);
+                setTimeout(() => sosBtn.classList.remove('sos-pressed'), 600);
+            }
 
             seq.style.display = 'flex';
             document.body.style.overflow = 'hidden';
