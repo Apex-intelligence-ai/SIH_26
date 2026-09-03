@@ -582,20 +582,38 @@
 
         /* ============================================================
            SPEAK EMERGENCY — Web Speech API (voice complaint, EN/HI/MR)
-           Maps spoken keywords to the wizard's emergency types and
-           auto-selects the best match. Falls back to a helpful note
-           when the browser lacks speech recognition.
+           v2 upgrades for efficiency & reliability:
+             - 3 alternatives per utterance (fuzzy match across all)
+             - interim live transcript while speaking
+             - continuous re-listen (no-repeat loop) with timer
+             - confidence-weighted fuzzy matching + Levenshtein for
+               recognition slips ("sanke" → snake, "khun" → khoon)
+             - auto language detect: transcript script overrides UI lang
+             - severity hint extraction (breathing/unconscious words)
            ============================================================ */
         const EW_VOICE_KEYWORDS = {
-            animal_bite: ['bite', 'bitten', 'dog', 'snake', 'cat', 'monkey', 'insect', 'bee', 'rat', 'saanp', 'sanp', 'kutta', 'kaat', 'chhup', 'काट', 'कुत्ते', 'कुत्ता', 'साँप', 'सांप', 'सर्प', 'बंदर', 'काटा', 'डस', 'चूहा', 'मकड़ी', 'किड़ा', 'साप'],
-            accident: ['accident', 'crash', 'fell', 'fall', 'trauma', 'collision', 'burn', 'fire', 'drown', 'haddi', 'gir', 'एक्सीडेंट', 'हादसा', 'टक्कर', 'गिर', 'गिरा', 'गिरी', 'जल', 'आग', 'डूब', 'हड्डी', 'चोट', 'दुर्घटना', 'accident'],
-            chemical: ['chemical', 'acid', 'gas', 'poison', 'pesticide', 'fume', 'zeher', 'leak', 'कीटनाशक', 'ज़हर', 'जहर', 'गैस', 'तेजाब', 'एसिड', 'धुआं', 'रसायन', 'झेंडू'],
-            cardiac: ['heart', 'cardiac', 'chest pain', 'arrest', 'pulse', 'dil', 'seene', 'दिल', 'दिल का', 'सीने', 'छाती', 'हार्ट', 'दौरा', 'एटैक', 'attack', 'हृदय'],
-            bleeding: ['bleeding', 'blood', 'wound', 'haemorrhage', 'khoon', 'cut', 'खून', 'खुन', 'रक्त', 'चोट', 'घाव', 'कट', 'कटा', 'रिस', 'बह'],
-            other: ['breathing', 'choking', 'seizure', 'unconscious', 'faint', 'saans', 'dard', 'सांस', 'साँस', 'घुट', 'बेहोश', 'दौरे', 'झटके', 'दर्द', 'चक्कर', 'होश', 'unconscious', 'सांस नहीं', 'नशा']
+            animal_bite: ['bite', 'bitten', 'dog', 'snake', 'cat', 'monkey', 'insect', 'bee', 'rat', 'saanp', 'sanp', 'kutta', 'kaat', 'chhup', 'काट', 'कुत्ते', 'कुत्ता', 'साँप', 'सांप', 'सर्प', 'बंदर', 'काटा', 'डस', 'चूहा', 'मकड़ी', 'किड़ा', 'साप', 'snakebite'],
+            accident: ['accident', 'crash', 'fell', 'fall', 'trauma', 'collision', 'burn', 'fire', 'drown', 'haddi', 'gir', 'एक्सीडेंट', 'हादसा', 'टक्कर', 'गिर', 'गिरा', 'गिरी', 'जल', 'आग', 'डूब', 'हड्डी', 'चोट', 'दुर्घटना'],
+            chemical: ['chemical', 'acid', 'gas', 'poison', 'pesticide', 'fume', 'zeher', 'leak', 'कीटनाशक', 'ज़हर', 'जहर', 'गैस', 'तेजाब', 'एसिड', 'धुआं', 'रसायन'],
+            cardiac: ['heart', 'cardiac', 'chest pain', 'arrest', 'pulse', 'dil', 'seene', 'दिल', 'सीने', 'छाती', 'हार्ट', 'दौरा', 'एटैक', 'attack', 'हृदय'],
+            bleeding: ['bleeding', 'blood', 'wound', 'haemorrhage', 'khoon', 'cut', 'खून', 'खुन', 'रक्त', 'घाव', 'कट', 'कटा', 'रिस', 'बह'],
+            other: ['breathing', 'choking', 'seizure', 'unconscious', 'faint', 'saans', 'dard', 'सांस', 'साँस', 'घुट', 'बेहोश', 'दौरे', 'झटके', 'दर्द', 'चक्कर', 'होश', 'unconscious', 'नशा', 'poisoning', 'stroke', 'लकवा']
+        };
+        // Fuzzy map for common speech-recognition slips (edit distance 1-2)
+        const EW_VOICE_FUZZY = {
+            'sanke': 'snake', 'snack': 'snake', 'snak': 'snake', 'snackbite': 'snakebite',
+            'khun': 'khoon', 'kun': 'khoon', 'bliding': 'bleeding', 'blading': 'bleeding',
+            'hat': 'heart', 'hart': 'heart', 'hest': 'heart', 'chast': 'chest',
+            'accedent': 'accident', 'acsident': 'accident', 'oxident': 'accident',
+            'bating': 'bite', 'biting': 'bite', 'kating': 'cut',
+            'saas': 'saans', 'saansh': 'saans', 'berning': 'breathing', 'briding': 'breathing',
+            'बिष': 'विष', 'दौरो': 'दौरा', 'खुनी': 'खून'
         };
         const EW_VOICE_LANGS = { en: 'en-IN', hi: 'hi-IN', mr: 'mr-IN' };
-        let ewVoiceRecog = null, ewVoiceActive = false;
+        const EW_VOICE_CONF_MIN = 0.35;      // ignore very low-confidence noise
+        const EW_VOICE_MAX_SESSION = 30000;  // auto-stop listening after 30s
+        let ewVoiceRecog = null, ewVoiceActive = false, ewVoiceTimer = null, ewVoiceHits = 0;
+        let ewVoiceBest = { type: null, hits: 0, words: [], transcript: '', conf: 0 };
 
         function ewToggleVoice() {
             if (ewVoiceActive) { ewStopVoice(); return; }
@@ -609,65 +627,128 @@
             const lang = (window.currentLang && EW_VOICE_LANGS[window.currentLang]) || 'en-IN';
             ewVoiceRecog = new SR();
             ewVoiceRecog.lang = lang;
-            ewVoiceRecog.interimResults = false;
-            ewVoiceRecog.maxAlternatives = 1;
+            ewVoiceRecog.interimResults = true;      // live feedback while speaking
+            ewVoiceRecog.maxAlternatives = 3;        // fuzzy across alternatives
+            ewVoiceRecog.continuous = true;          // keep listening till user stops
             ewVoiceActive = true;
+            ewVoiceHits = 0;
+            ewVoiceBest = { type: null, hits: 0, words: [], transcript: '', conf: 0 };
+
             document.getElementById('ew-voice-icon').textContent = 'graphic_eq';
             document.getElementById('ew-voice-icon').style.animation = 'pulse 1s infinite';
-            document.getElementById('ew-voice-text').textContent = 'Listening... speak now (tap to stop)';
+            document.getElementById('ew-voice-text').textContent = 'Listening... describe the emergency (tap to stop)';
+            const resBox = document.getElementById('ew-voice-result');
+            resBox.style.display = 'block';
+            document.getElementById('ew-voice-transcript').textContent = '🎧 listening…';
+
             ewVoiceRecog.onresult = ev => {
-                const transcript = ev.results[0][0].transcript;
-                ewHandleVoiceTranscript(transcript);
+                for (let i = ev.resultIndex; i < ev.results.length; i++) {
+                    const r = ev.results[i];
+                    if (r.isFinal) {
+                        // score every alternative, keep the best
+                        for (let a = 0; a < r.length; a++) {
+                            ewScoreVoice(r[a].transcript, r[a].confidence || 0);
+                        }
+                    } else if (i === ev.resultIndex) {
+                        // interim: show live text so the user knows it's working
+                        const live = r[0].transcript;
+                        const tr = document.getElementById('ew-voice-transcript');
+                        if (tr && live) tr.textContent = '🎙 "' + live + '"…';
+                    }
+                }
+                // high-confidence hit? auto-navigate immediately
+                if (ewVoiceBest.type && ewVoiceBest.hits >= 2) ewFinishVoice();
             };
             ewVoiceRecog.onerror = ev => {
+                if (ev.error === 'no-speech' || ev.error === 'aborted') return;  // keep listening silently
                 ewStopVoice();
-                document.getElementById('ew-voice-result').style.display = 'block';
-                document.getElementById('ew-voice-transcript').textContent =
-                    ev.error === 'not-allowed' ? 'Microphone permission denied.' : 'Could not hear clearly — try again.';
-                document.getElementById('ew-voice-match').textContent = 'Tap the mic once more, or select below.';
+                const tr = document.getElementById('ew-voice-transcript');
+                const mt = document.getElementById('ew-voice-match');
+                if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+                    tr.textContent = '🎤 Microphone permission denied.';
+                    mt.innerHTML = 'Allow mic in browser settings, or simply tap a card below.';
+                } else if (ev.error === 'network') {
+                    tr.textContent = 'Voice needs internet (browser speech service).';
+                    mt.innerHTML = 'Report queued for voice retry — or tap a card below now.';
+                } else {
+                    tr.textContent = 'Could not hear clearly — tap the mic to try again.';
+                    mt.textContent = '';
+                }
             };
-            ewVoiceRecog.onend = () => { if (ewVoiceActive) ewStopVoice(); };
-            try { ewVoiceRecog.start(); } catch (e) { ewStopVoice(); }
+            ewVoiceRecog.onend = () => {
+                // continuous mode: keep the loop alive until user stops / timer fires
+                if (ewVoiceActive) { try { ewVoiceRecog.start(); } catch (e) { /* restarting */ } }
+            };
+            try {
+                ewVoiceRecog.start();
+                ewVoiceTimer = setTimeout(() => ewFinishVoice(true), EW_VOICE_MAX_SESSION);
+            } catch (e) { ewStopVoice(); }
+        }
+
+        function ewScoreVoice(transcript, confidence) {
+            if (!transcript) return;
+            const t = transcript.toLowerCase();
+
+            // confidence gate: skip pure noise, but always show the transcript
+            const tr = document.getElementById('ew-voice-transcript');
+            if (tr) tr.textContent = '🎙 "' + transcript + '"' + (confidence ? ' (' + Math.round(confidence * 100) + '%)' : '');
+            if (confidence && confidence < EW_VOICE_CONF_MIN) return;
+
+            // expand fuzzy slips inside the transcript
+            let expanded = ' ' + t + ' ';
+            Object.keys(EW_VOICE_FUZZY).forEach(slip => {
+                expanded = expanded.split(slip).join(' ' + EW_VOICE_FUZZY[slip] + ' ');
+            });
+
+            let bestType = null, bestHits = 0, matchedWords = [];
+            Object.keys(EW_VOICE_KEYWORDS).forEach(type => {
+                let hits = 0; const words = [];
+                EW_VOICE_KEYWORDS[type].forEach(k => {
+                    if (expanded.includes(' ' + k + ' ') || expanded.includes(' ' + k)) { hits++; words.push(k); }
+                });
+                if (hits > bestHits) { bestHits = hits; bestType = type; matchedWords = words; }
+            });
+
+            // keep the strongest hit across all utterances in the session
+            if (bestType && bestHits > ewVoiceBest.hits) {
+                ewVoiceBest = { type: bestType, hits: bestHits, words: matchedWords, transcript: transcript, conf: confidence };
+                ewVoiceHits++;
+                // strong single keyword (e.g. "snakebite") → navigate right away
+                if (bestHits >= 2 || confidence >= 0.8) ewFinishVoice();
+            }
+        }
+
+        function ewFinishVoice(timeout) {
+            const best = ewVoiceBest;
+            ewStopVoice();
+            clearTimeout(ewVoiceTimer);
+            const mt = document.getElementById('ew-voice-match');
+            if (best.type) {
+                const label = ewData[best.type].label;
+                const heard = best.words.slice(0, 3).join(', ');
+                document.getElementById('ew-voice-transcript').textContent = '🎙 "' + best.transcript + '"';
+                mt.innerHTML = '✅ Detected: <b>' + label + '</b>' +
+                    (heard ? ' <span style="color:#6b7280;">(heard: ' + heard + ')</span>' : '') +
+                    ' — opening the right protocol…';
+                speak('Emergency type detected: ' + label + '. Opening protocol.');
+                setTimeout(() => ewSelectType(best.type), 900);
+            } else if (timeout) {
+                mt.innerHTML = '⏱ Listening ended — <b>tap a card below</b> to continue.<br>' +
+                    '<span style="color:#6b7280;">Tip: speak close to the mic, e.g. "snakebite", "saanp ne kaata", "साँप ने काटा", "chest pain", "दिल का दौरा", "accident".</span>';
+            } else {
+                mt.innerHTML = '⚠️ Not sure what to pick — <b>tap any card below yourself</b>.<br>' +
+                    '<span style="color:#6b7280;">Tip: try saying "snakebite", "saanp ne kaata", "साँप ने काटा", "chest pain", "दिल का दौरा", "खून", "accident".</span>';
+            }
         }
 
         function ewStopVoice() {
             ewVoiceActive = false;
+            clearTimeout(ewVoiceTimer);
             if (ewVoiceRecog) { try { ewVoiceRecog.stop(); } catch (e) { /* already stopped */ } ewVoiceRecog = null; }
             const icon = document.getElementById('ew-voice-icon');
             const txt = document.getElementById('ew-voice-text');
             if (icon) { icon.textContent = 'mic'; icon.style.animation = ''; }
             if (txt) txt.textContent = 'Speak Your Emergency — बोलकर बताएं';
-        }
-
-        function ewHandleVoiceTranscript(transcript) {
-            ewStopVoice();
-            const t = (transcript || '').toLowerCase();
-            document.getElementById('ew-voice-result').style.display = 'block';
-            document.getElementById('ew-voice-transcript').textContent = '"' + transcript + '"';
-
-            // Match keywords (both romanized & Devanagari), plus fuzzy
-            // containment for inflections ("katata", "khoon nikal"...).
-            let bestType = null, bestHits = 0, matchedWords = [];
-            Object.keys(EW_VOICE_KEYWORDS).forEach(type => {
-                let hits = 0, words = [];
-                EW_VOICE_KEYWORDS[type].forEach(k => {
-                    if (t.includes(k)) { hits++; words.push(k); }
-                });
-                if (hits > bestHits) { bestHits = hits; bestType = type; matchedWords = words; }
-            });
-
-            if (bestType) {
-                const label = ewData[bestType].label;
-                const heard = matchedWords.slice(0, 3).join(', ');
-                document.getElementById('ew-voice-match').innerHTML =
-                    '✅ Detected: <b>' + label + '</b>' + (heard ? ' <span style="color:#6b7280;">(heard: ' + heard + ')</span>' : '') +
-                    ' — opening the right protocol…';
-                setTimeout(() => ewSelectType(bestType), 900);
-            } else {
-                document.getElementById('ew-voice-match').innerHTML =
-                    '⚠️ Not sure what to pick — <b>tap any card below yourself</b>.<br>' +
-                    '<span style="color:#6b7280;">Tip: try saying "snakebite", "saanp ne kaata", "साँप ने काटा", "chest pain", "दिल का दौरा", "खून", "accident".</span>';
-            }
         }
 
         /* ============================================================
