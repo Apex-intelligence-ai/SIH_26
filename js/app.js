@@ -279,6 +279,39 @@
             if (locked) e.preventDefault();
         }, { passive: false });
 
+        /* ============================================================
+           OFFLINE STATUS PANEL — real network state + queued items
+           ============================================================ */
+        function openOfflinePanel() {
+            const body = document.getElementById('offline-panel-body');
+            const online = window.Outbox ? window.Outbox.isOnline() : navigator.onLine;
+            const items = window.Outbox ? window.Outbox.all() : [];
+
+            const rows = items.length ? items.map(i => `
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 10px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:7px;">
+                    <div>
+                        <div style="font-weight:800; font-size:13px; color:#1f2937;">${i.kind === 'booking' ? '🏥' : '🚑'} ${i.kind === 'booking' ? 'Facility booking' : 'Emergency report'}</div>
+                        <div style="font-size:11px; color:#6b7280;">${new Date(i.queuedAt).toLocaleString()} • ${i.id}</div>
+                    </div>
+                    <span class="dash-badge yellow">QUEUED</span>
+                </div>`).join('')
+                : '<div style="text-align:center; padding:18px; color:#6b7280; font-size:13.5px;">Nothing queued — all submissions are synced. ✅</div>';
+
+            body.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:12px; margin-bottom:14px; background:${online ? '#f0fdf4' : '#fef2f2'}; border:2px solid ${online ? '#86efac' : '#fecaca'};">
+                    <span class="material-symbols-outlined" style="color:${online ? '#16a34a' : '#ba1a1a'}; font-size:26px;">${online ? 'wifi' : 'wifi_off'}</span>
+                    <div>
+                        <div style="font-weight:800; font-size:14.5px; color:${online ? '#166534' : '#991b1b'};">${online ? 'Connected' : 'Offline Mode Active'}</div>
+                        <div style="font-size:12px; color:#6b7280;">${online ? 'Submissions go straight to the Command Center.' : 'Reports are saved on-device and auto-sync when the network returns.'}</div>
+                    </div>
+                </div>
+                <div style="font-size:11px; font-weight:800; color:#00453d; letter-spacing:.5px; margin-bottom:8px;">OUTBOX QUEUE (${items.length})</div>
+                ${rows}
+                <div style="font-size:11.5px; color:#6b7280; margin-top:10px;">Emergency guidance & synchronized facility info stay available without internet — that is the offline-first promise.</div>`;
+
+            openModal('modal-offline-panel');
+        }
+
         function toggleEmergencyMode() {
             const overlay = document.getElementById('emergency-overlay');
             if (overlay) overlay.classList.toggle('active');
@@ -856,6 +889,23 @@
             setTimeout(() => {
                 s4.classList.remove('opacity-0', 'scale-95');
                 s4.classList.add('opacity-100', 'scale-100');
+
+                // Fully functional: an SOS becomes a real dashboard case.
+                // Online -> straight into the Command Center feed.
+                // Offline -> persisted to the Outbox, auto-syncs on reconnect.
+                const payload = {
+                    patient: 'Bystander SOS (identity pending)',
+                    type: 'Zero-Tap SOS 🆘',
+                    priority: 'CRITICAL',
+                    hospital: 'District Hospital Wardha'
+                };
+                try {
+                    if (window.Outbox && !window.Outbox.isOnline()) {
+                        window.Outbox.enqueue('sos', payload);
+                    } else if (typeof pushTrustedSosCase === 'function') {
+                        pushTrustedSosCase();
+                    }
+                } catch (e) { console.warn('[SOS] dispatch skipped:', e.message); }
             }, 3000);
         }
 

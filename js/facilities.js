@@ -41,7 +41,9 @@
 
     const WARDDHA_CENTER = { lat: 20.7450, lng: 78.6030 };
     const state = { q: '', chip: 'all', maxDist: 0, userLoc: null };
-    const booked = new Set();
+    const booked = new Set(
+        (() => { try { return JSON.parse(localStorage.getItem('em_bookings') || '[]'); } catch (e) { return []; } })()
+    );
 
     /* ---------------------------- HELPERS ---------------------------- */
 
@@ -377,9 +379,15 @@
             const f = FACILITIES.find(x => x.id === id);
             if (!f || booked.has(id)) return;
             booked.add(id);
+            try { localStorage.setItem('em_bookings', JSON.stringify([...booked])); } catch (e) { /* private mode */ }
             render();
-            toast('\u2705 Request sent to ' + f.name + ' \u2014 ref FF-' +
-                String(Math.floor(1000 + Math.random() * 9000)), 'task_alt');
+            const ref = 'FF-' + String(Math.floor(1000 + Math.random() * 9000));
+            if (window.Outbox && !window.Outbox.isOnline()) {
+                window.Outbox.enqueue('booking', { type: 'Facility Booking — ' + f.name, hospital: f.name, note: 'Ref ' + ref });
+                toast('📴 Offline — booking queued & will auto-sync to ' + f.name, 'cloud_upload');
+            } else {
+                toast('\u2705 Request sent to ' + f.name + ' \u2014 ref ' + ref, 'task_alt');
+            }
         },
         render
     };

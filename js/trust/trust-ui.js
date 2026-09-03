@@ -71,6 +71,12 @@
         }
     };
     TL.OpsFeed = OpsFeed;
+    // SOS dispatch entry-point for outbox/app: runs the full
+    // trust pipeline for a zero-tap SOS (identity-free).
+    window.pushTrustedSosCase = function () {
+        try { runUnconsciousPipeline({ reporterVerified: false, digilockerVerified: false }); }
+        catch (e) { console.warn('[TrustLayer] SOS pipeline error:', e.message); }
+    };
 
     /* ============================================================
        LEGAL DETERRENT BANNER (BNS false-report warning)
@@ -642,6 +648,19 @@
                             ? td.subtypes.find(s => s.id === ewCurrentSubtype) : null;
                         if (td) typeLabel = td.label + (sub ? ' › ' + sub.label : '');
                     } catch (e) { /* wizard state unavailable — fall back */ }
+
+                    // OFFLINE-FIRST: no network -> queue it, sync later.
+                    if (window.Outbox && !window.Outbox.isOnline()) {
+                        window.Outbox.enqueue('wizard', {
+                            type: typeLabel,
+                            patient: 'Citizen-reported patient',
+                            priority: 'URGENT',
+                            note: 'Filed offline with on-device evidence'
+                        });
+                        OpsFeed.push('📴 Offline — report queued, will auto-sync', 'warn');
+                        consciousSubmitted = false;
+                        return origCloseWizard.apply(this, arguments);
+                    }
 
                     const payload = {
                         type: typeLabel,
