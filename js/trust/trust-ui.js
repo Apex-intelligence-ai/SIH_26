@@ -533,12 +533,15 @@
         if (!tbody || typeof adminCases === 'undefined') return;
         tbody.querySelectorAll('tr').forEach((row, i) => {
             const c = adminCases[i];
-            if (!c || !c.trust || row.querySelector('.trust-score-chip')) return;
+            // `c.trust` is reserved for live-scored cases pushed by the
+            // TrustLayer pipeline ({score, tier, factors}). Seeded demo
+            // rows render their own 🛡 chip inline — never re-decorate.
+            if (!c || typeof c.trust !== 'object' || !c.trust || row.querySelector('.trust-score-chip')) return;
             const td = row.cells[priorityCellIdx];
             if (!td) return;
             const chip = document.createElement('span');
-            chip.className = 'trust-score-chip tier-' + c.trust.tier.toLowerCase();
-            chip.title = 'Trust factors:\n' + c.trust.factors.map(f => f.label).join('\n');
+            chip.className = 'trust-score-chip tier-' + String(c.trust.tier || 'MEDIUM').toLowerCase();
+            chip.title = 'Trust factors:\n' + (c.trust.factors || []).map(f => f.label).join('\n');
             chip.textContent = '🛡 ' + c.trust.score + '%';
             td.appendChild(chip);
         });

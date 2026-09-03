@@ -18,13 +18,15 @@
    ============================================================ */
 
         // --- Admin Dashboard State ---
+        // NOTE: trust-ui.js decorator reserves `c.trust` (object) for live-scored
+        // cases. Seeded demo cases use trustScore/trustTier/trustNote instead.
         let adminCases = [
-            { id: "EM-9021", time: "2 mins ago", patient: "Ramesh Pawar", age: "42 / M", type: "Snakebite 🐍", priority: "CRITICAL", hospital: "District Hospital Wardha", doctor: "Dr. Kulkarni", status: "En Route", eta: "8 mins", vitals: "BP: 90/60 • SpO2: 92%", trust: 91, trustTier: "HIGH", trustNote: "OTP verified + photo + GPS + 3-report cluster" },
-            { id: "EM-9020", time: "14 mins ago", patient: "Sunita Ghorpade", age: "29 / F", type: "Accident / Trauma", priority: "CRITICAL", hospital: "District Hospital Wardha", doctor: "Dr. Deshmukh", status: "In ER", eta: "Arrived", vitals: "BP: 110/70 • SpO2: 97%", trust: 84, trustTier: "HIGH", trustNote: "DigiLocker badge + camera evidence + GPS" },
-            { id: "EM-9019", time: "28 mins ago", patient: "Babanrao Patil", age: "64 / M", type: "Cardiac Arrest", priority: "CRITICAL", hospital: "Rural Hospital Sevagram", doctor: "Dr. A. Verma", status: "ICU Admitted", eta: "Arrived", vitals: "Pulse: 88 • SpO2: 95%", trust: 78, trustTier: "MEDIUM", trustNote: "OTP verified + GPS + wearable HR spike" },
-            { id: "EM-9018", time: "45 mins ago", patient: "Kavita Shinde", age: "31 / F", type: "Severe Bleeding", priority: "URGENT", hospital: "SDH Hinganghat", doctor: "Dr. R. Joshi", status: "OT Prepped", eta: "Arrived", vitals: "BP: 100/65 • Hb: 8.4", trust: 63, trustTier: "MEDIUM", trustNote: "Photo evidence + GPS, no cluster" },
-            { id: "EM-9017", time: "1 hr ago", patient: "Vijay Gaikwad", age: "52 / M", type: "Breathing Issue", priority: "STABLE", hospital: "PHC Deoli", doctor: "Dr. M. Roy", status: "Under Observation", eta: "Arrived", vitals: "SpO2: 98% on O2", trust: 41, trustTier: "MEDIUM", trustNote: "OTP verified + GPS only" },
-            { id: "EM-9016", time: "2 hrs ago", patient: "Unknown (bystander SOS)", age: "— / M", type: "Road Accident 🛣️", priority: "URGENT", hospital: "PHC Seloo", doctor: "Dr. On Duty", status: "Stabilized / Discharged", eta: "Arrived", vitals: "Assessed on arrival", trust: 22, trustTier: "LOW", trustNote: "Anonymous bare SOS — volunteer verified on IVR" }
+            { id: "EM-9021", time: "2 mins ago", patient: "Ramesh Pawar", age: "42 / M", type: "Snakebite 🐍", priority: "CRITICAL", hospital: "District Hospital Wardha", doctor: "Dr. Kulkarni", status: "En Route", eta: "8 mins", vitals: "BP: 90/60 • SpO2: 92%", trustScore: 91, trustTier: "HIGH", trustNote: "OTP verified + photo + GPS + 3-report cluster" },
+            { id: "EM-9020", time: "14 mins ago", patient: "Sunita Ghorpade", age: "29 / F", type: "Accident / Trauma", priority: "CRITICAL", hospital: "District Hospital Wardha", doctor: "Dr. Deshmukh", status: "In ER", eta: "Arrived", vitals: "BP: 110/70 • SpO2: 97%", trustScore: 84, trustTier: "HIGH", trustNote: "DigiLocker badge + camera evidence + GPS" },
+            { id: "EM-9019", time: "28 mins ago", patient: "Babanrao Patil", age: "64 / M", type: "Cardiac Arrest", priority: "CRITICAL", hospital: "Rural Hospital Sevagram", doctor: "Dr. A. Verma", status: "ICU Admitted", eta: "Arrived", vitals: "Pulse: 88 • SpO2: 95%", trustScore: 78, trustTier: "MEDIUM", trustNote: "OTP verified + GPS + wearable HR spike" },
+            { id: "EM-9018", time: "45 mins ago", patient: "Kavita Shinde", age: "31 / F", type: "Severe Bleeding", priority: "URGENT", hospital: "SDH Hinganghat", doctor: "Dr. R. Joshi", status: "OT Prepped", eta: "Arrived", vitals: "BP: 100/65 • Hb: 8.4", trustScore: 63, trustTier: "MEDIUM", trustNote: "Photo evidence + GPS, no cluster" },
+            { id: "EM-9017", time: "1 hr ago", patient: "Vijay Gaikwad", age: "52 / M", type: "Breathing Issue", priority: "STABLE", hospital: "PHC Deoli", doctor: "Dr. M. Roy", status: "Under Observation", eta: "Arrived", vitals: "SpO2: 98% on O2", trustScore: 41, trustTier: "MEDIUM", trustNote: "OTP verified + GPS only" },
+            { id: "EM-9016", time: "2 hrs ago", patient: "Unknown (bystander SOS)", age: "— / M", type: "Road Accident 🛣️", priority: "URGENT", hospital: "PHC Seloo", doctor: "Dr. On Duty", status: "Stabilized / Discharged", eta: "Arrived", vitals: "Assessed on arrival", trustScore: 22, trustTier: "LOW", trustNote: "Anonymous bare SOS — volunteer verified on IVR" }
         ];
 
         let hospitalData = [
@@ -104,12 +106,14 @@
             tbody.innerHTML = '';
             adminCases.slice(0, 4).forEach(c => {
                 const priorityBadge = c.priority === 'CRITICAL' ? 'dash-badge red' : (c.priority === 'URGENT' ? 'dash-badge yellow' : 'dash-badge blue');
+                const trustBadge = c.trustTier === 'HIGH' ? 'dash-badge red' : (c.trustTier === 'MEDIUM' ? 'dash-badge yellow' : 'dash-badge blue');
                 tbody.innerHTML += `
                     <tr>
                         <td class="font-bold font-mono text-primary">${c.id}</td>
                         <td><div class="font-bold">${c.patient}</div><div class="text-[11px] text-on-surface-variant">${c.age}</div></td>
                         <td>${c.type}</td>
                         <td><span class="${priorityBadge}">${c.priority}</span></td>
+                        <td><span class="${trustBadge}" title="${c.trustNote || ''}">🛡 ${c.trustScore ?? '—'} · ${c.trustTier ?? 'N/A'}</span></td>
                         <td class="text-xs font-semibold">${c.hospital}</td>
                         <td><span class="font-bold text-error">${c.eta}</span></td>
                         <td>
@@ -129,6 +133,9 @@
             adminCases.forEach((c, idx) => {
                 const priorityBadge = c.priority === 'CRITICAL' ? 'dash-badge red' : (c.priority === 'URGENT' ? 'dash-badge yellow' : 'dash-badge blue');
                 const trustBadge = c.trustTier === 'HIGH' ? 'dash-badge red' : (c.trustTier === 'MEDIUM' ? 'dash-badge yellow' : 'dash-badge blue');
+                const trustChip = c.trustScore != null
+                    ? `<span class="${trustBadge}" title="${c.trustNote || ''}">🛡 ${c.trustScore} · ${c.trustTier}</span>`
+                    : '<span class="dash-badge gray">pending</span>';
                 tbody.innerHTML += `
                     <tr>
                         <td class="font-bold font-mono text-primary">${c.id}</td>
@@ -136,7 +143,7 @@
                         <td><div class="font-bold">${c.patient}</div><div class="text-xs text-on-surface-variant">${c.age} • ${c.vitals}</div></td>
                         <td class="font-semibold">${c.type}</td>
                         <td><span class="${priorityBadge}">${c.priority}</span></td>
-                        <td><span class="${trustBadge}" title="${c.trustNote || ''}">🛡 ${c.trust} · ${c.trustTier}</span></td>
+                        <td>${trustChip}</td>
                         <td class="text-xs font-medium">${c.hospital}</td>
                         <td class="text-xs font-bold text-primary">${c.doctor}</td>
                         <td>
@@ -324,7 +331,10 @@
                 doctor: "Dr. On Duty",
                 status: "En Route",
                 eta: "10 mins",
-                vitals: "Assessing..."
+                vitals: "Assessing...",
+                trustScore: 45,
+                trustTier: "MEDIUM",
+                trustNote: "Awaiting operator verification"
             });
 
             closeModal('modal-quick-admission');
