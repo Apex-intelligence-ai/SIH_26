@@ -730,7 +730,13 @@
                 mt.innerHTML = '✅ Detected: <b>' + label + '</b>' +
                     (heard ? ' <span style="color:#6b7280;">(heard: ' + heard + ')</span>' : '') +
                     ' — opening the right protocol…';
-                speak('Emergency type detected: ' + label + '. Opening protocol.');
+                try {
+                    if ('speechSynthesis' in window) {
+                        const u = new SpeechSynthesisUtterance('Emergency type detected: ' + label + '. Opening protocol.');
+                        u.lang = (window.currentLang === 'hi') ? 'hi-IN' : (window.currentLang === 'mr') ? 'mr-IN' : 'en-IN';
+                        window.speechSynthesis.speak(u);
+                    }
+                } catch (e) { /* TTS optional — never block navigation */ }
                 setTimeout(() => ewSelectType(best.type), 900);
             } else if (timeout) {
                 mt.innerHTML = '⏱ Listening ended — <b>tap a card below</b> to continue.<br>' +
