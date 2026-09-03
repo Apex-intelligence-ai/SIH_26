@@ -273,6 +273,12 @@
             }
         }
 
+        // Mobile: pull-to-refresh guard while any modal/SOS screen is open
+        document.addEventListener('touchmove', function (e) {
+            const locked = document.body.style.overflow === 'hidden';
+            if (locked) e.preventDefault();
+        }, { passive: false });
+
         function toggleEmergencyMode() {
             const overlay = document.getElementById('emergency-overlay');
             if (overlay) overlay.classList.toggle('active');
